@@ -1,0 +1,38 @@
+#!/usr/bin/with-contenv bash
+# Traegt den externen PDF-Renderer in BookStacks .env nach.
+#
+# Warum nicht einfach als Docker-Environment-Variable? PHP-FPM raeumt die
+# Prozessumgebung standardmaessig auf (clear_env), deshalb ist der Eintrag in
+# der .env der zuverlaessige Weg. Idempotent - laeuft bei jedem Start.
+
+set -euo pipefail
+
+ENV_FILE="/config/www/.env"
+CFG="/config/bookstack-to-pdf/config.yaml"
+BIN="/opt/bookstack-to-pdf/.venv/bin/bookstack-to-pdf"
+
+if [[ ! -f "$ENV_FILE" ]]; then
+    echo "[pdf-command] $ENV_FILE existiert noch nicht - Container einmal neu starten."
+    exit 0
+fi
+
+if [[ ! -f "$CFG" ]]; then
+    echo "[pdf-command] WARNUNG: $CFG fehlt. Export faellt auf dompdf zurueck."
+fi
+
+add_if_missing() {
+    local key="$1" line="$2"
+    if ! grep -q "^${key}=" "$ENV_FILE"; then
+        printf '%s\n' "$line" >> "$ENV_FILE"
+        echo "[pdf-command] ${key} in .env ergaenzt"
+    fi
+}
+
+add_if_missing "EXPORT_PDF_COMMAND" \
+    "EXPORT_PDF_COMMAND=\"${BIN} --config ${CFG} {input_html_path} {output_pdf_path}\""
+
+# 60s ist der empfohlene Startwert; 120s gibt Luft fuer grosse Buecher mit Bildern.
+add_if_missing "EXPORT_PDF_COMMAND_TIMEOUT" "EXPORT_PDF_COMMAND_TIMEOUT=120"
+
+# Bleibt bewusst false: BookStack soll beim Rendern keine externen URLs ziehen.
+add_if_missing "ALLOW_UNTRUSTED_SERVER_FETCHING" "ALLOW_UNTRUSTED_SERVER_FETCHING=false"
