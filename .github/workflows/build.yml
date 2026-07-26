@@ -1,0 +1,146 @@
+name: Build image
+
+# Baut nur, wenn sich tatsaechlich etwas geaendert hat:
+#   - neues linuxserver/bookstack Basis-Image (Digest)
+#   - neuer Commit in NETWAYS/bookstack-to-pdf
+#   - eigene Aenderung am Dockerfile
+#
+# GitHub kann nicht von fremden Repos benachrichtigt werden, deshalb wird
+# einmal taeglich geprueft. Ohne Aenderung endet der Lauf nach ~20 Sekunden
+# ohne Build.
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - 'Dockerfile'
+      - '.github/workflows/build-image.yml'
+  schedule:
+    - cron: '17 4 * * *'
+  workflow_dispatch:
+    inputs:
+      force:
+        description: 'Bauen, auch wenn sich nichts geaendert hat'
+        type: boolean
+        default: false
+
+env:
+  IMAGE: ghcr.io/${{ github.repository_owner }}/bookstack-pdf
+  BASE_IMAGE: lscr.io/linuxserver/bookstack:latest
+  B2PDF_REPO: https://github.com/NETWAYS/bookstack-to-pdf
+
+jobs:
+  check:
+    runs-on: ubuntu-latest
+    outputs:
+      needs_build: ${{ steps.compare.outputs.needs_build }}
+      base_digest: ${{ steps.upstream.outputs.base_digest }}
+      b2pdf_sha: ${{ steps.upstream.outputs.b2pdf_sha }}
+      reason: ${{ steps.compare.outputs.reason }}
+    steps:
+      - uses: docker/login-action@v3
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Upstream-Staende ermitteln
+        id: upstream
+        run: |
+          set -euo pipefail
+          BASE_DIGEST="$(docker buildx imagetools inspect "$BASE_IMAGE" \
+            --format '{{.Manifest.Digest}}')"
+          B2PDF_SHA="$(git ls-remote "$B2PDF_REPO" main | cut -f1)"
+
+          [ -n "$BASE_DIGEST" ] || { echo "Basis-Digest leer"; exit 1; }
+          [ -n "$B2PDF_SHA" ]   || { echo "bookstack-to-pdf SHA leer"; exit 1; }
+
+          echo "base_digest=$BASE_DIGEST" >> "$GITHUB_OUTPUT"
+          echo "b2pdf_sha=$B2PDF_SHA"     >> "$GITHUB_OUTPUT"
+          echo "Basis:          $BASE_DIGEST"
+          echo "bookstack-to-pdf: $B2PDF_SHA"
+
+      - name: Mit letztem Build vergleichen
+        id: compare
+        run: |
+          set -euo pipefail
+          # Die Staende des letzten Builds stecken als Labels im eigenen Image.
+          # Kein State-File, kein Commit-Rauschen im Repo.
+          LABELS="$(docker buildx imagetools inspect "${IMAGE}:latest" \
+            --format '{{json .Image.Config.Labels}}' 2>/dev/null || echo '{}')"
+          OLD_BASE="$(echo "$LABELS" | jq -r '."at.ebt.base-digest" // empty')"
+          OLD_SHA="$(echo  "$LABELS" | jq -r '."at.ebt.b2pdf-sha"   // empty')"
+
+          REASON=""
+          if [ "${{ inputs.force }}" = "true" ]; then
+            REASON="manuell erzwungen"
+          elif [ "${{ github.event_name }}" = "push" ]; then
+            REASON="Dockerfile geaendert"
+          elif [ -z "$OLD_BASE" ] || [ -z "$OLD_SHA" ]; then
+            REASON="kein vorheriges Image gefunden"
+          elif [ "$OLD_BASE" != "${{ steps.upstream.outputs.base_digest }}" ]; then
+            REASON="neues linuxserver/bookstack Basis-Image"
+          elif [ "$OLD_SHA" != "${{ steps.upstream.outputs.b2pdf_sha }}" ]; then
+            REASON="neuer Commit in bookstack-to-pdf"
+          fi
+
+          if [ -n "$REASON" ]; then
+            echo "needs_build=true" >> "$GITHUB_OUTPUT"
+            echo "reason=$REASON"   >> "$GITHUB_OUTPUT"
+            echo "::notice::Build noetig - $REASON"
+          else
+            echo "needs_build=false" >> "$GITHUB_OUTPUT"
+            echo "reason=unveraendert" >> "$GITHUB_OUTPUT"
+            echo "::notice::Alles aktuell, kein Build"
+          fi
+
+  build:
+    needs: check
+    if: needs.check.outputs.needs_build == 'true'
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      packages: write
+    steps:
+      - uses: actions/checkout@v4
+      - uses: docker/setup-buildx-action@v3
+
+      - uses: docker/login-action@v3
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Bauen und pushen
+        uses: docker/build-push-action@v6
+        with:
+          context: .
+          push: true
+          # Kein Multi-Arch: Hetzner CX/CPX ist amd64. Fuer ARM (CAX)
+          # zusaetzlich linux/arm64 eintragen - dauert dann deutlich laenger.
+          platforms: linux/amd64
+          build-args: |
+            BOOKSTACK_VERSION=latest
+            B2PDF_REF=${{ needs.check.outputs.b2pdf_sha }}
+          tags: |
+            ${{ env.IMAGE }}:latest
+            ${{ env.IMAGE }}:${{ github.run_number }}
+          labels: |
+            at.ebt.base-digest=${{ needs.check.outputs.base_digest }}
+            at.ebt.b2pdf-sha=${{ needs.check.outputs.b2pdf_sha }}
+            org.opencontainers.image.revision=${{ github.sha }}
+          cache-from: type=gha
+          cache-to: type=gha,mode=max
+
+      - name: Zusammenfassung
+        run: |
+          {
+            echo "### Image gebaut"
+            echo ""
+            echo "| | |"
+            echo "|---|---|"
+            echo "| Grund | ${{ needs.check.outputs.reason }} |"
+            echo "| Basis-Digest | \`${{ needs.check.outputs.base_digest }}\` |"
+            echo "| bookstack-to-pdf | \`${{ needs.check.outputs.b2pdf_sha }}\` |"
+            echo "| Tag | \`${{ env.IMAGE }}:${{ github.run_number }}\` |"
+          } >> "$GITHUB_STEP_SUMMARY"
