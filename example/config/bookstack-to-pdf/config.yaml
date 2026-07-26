@@ -1,0 +1,70 @@
+# bookstack-to-pdf - EBT-Branding, deutsche Beschriftungen
+#
+# Liegt im persistenten /config-Volume: Aenderungen wirken sofort beim naechsten
+# Export, ohne Rebuild. Relative Asset-Pfade werden ab DIESEM Verzeichnis
+# aufgeloest, also ./assets/... = /config/bookstack-to-pdf/assets/...
+
+company:
+  name: "Energiebuchhaltung Tirol"
+  address_lines:
+    - "Musterstrasse 1"
+    - "6345 Koessen"
+  email: "office@energiebuchhaltung-tirol.at"
+  phone: "+43 000 0000000"
+  website: "https://www.energiebuchhaltung-tirol.at"
+
+branding:
+  logo: "./assets/ebt-logo.png"
+  logo_height_mm: 12
+  cover_logo_height_mm: 20
+  primary_color: "#1a6b3c"      # an deine Broschueren anpassen
+  text_color: "rgb(51,51,51)"
+  border_color: "#cccccc"
+  cover_background: null
+  # Bleibt aus: der Renderer soll auf dem Server keine externen URLs ziehen.
+  allow_remote_assets: false
+
+  body_font_size: "10pt"
+  footer_font_size: "8pt"
+  cover_title_font_size: "28pt"
+  cover_metadata_font_size: "10pt"
+  cover_tag_font_size: "7.2pt"
+  toc_font_size: "10.5pt"
+  code_font_size: "9pt"
+
+  # Systemschriften. Liberation Sans ist metrikkompatibel zu Arial und im
+  # Image installiert. Eigene Schrift: Dateien nach ./assets/fonts/ legen,
+  # hier eintragen, und der erste Name in font_family muss family entsprechen.
+  fonts: []
+  font_family: "Liberation Sans, Arial, Helvetica, sans-serif"
+
+cover:
+  enabled: true
+  # Metadaten sind bewusst AUS - siehe README, Abschnitt "Stolperfallen".
+  # Die Extraktion arbeitet mit Regex auf englischem BookStack-Text.
+  show_metadata: false
+  show_tags: false
+
+toc:
+  enabled: true
+  max_depth: 3
+
+strings:
+  toc_title: "Inhaltsverzeichnis"
+  page_of: "Seite {page} von {pages}"
+  created_by: "Erstellt von"
+  updated_by: "Aktualisiert von"
+  updated_at: "Stand"
+  version: "Version"
+  web_label: "Web"
+  email_label: "E-Mail"
+  phone_label: "Telefon"
+
+# Nur relevant, wenn du show_metadata auf true stellst. Muss dann zur
+# Sprache deiner BookStack-Oberflaeche passen - Export-HTML pruefen.
+metadata:
+  created_pattern: 'Created \d{1,2} [A-Za-z]+ \d{4} \d{2}:\d{2}:\d{2} by ([\w\- ]+)'
+  updated_pattern: 'Updated (\d{1,2} [A-Za-z]+ \d{4} \d{2}:\d{2}:\d{2}) by ([\w\- ]+)'
+  version_pattern: 'Revision #(\d+)'
+  date_input_format: "%d %B %Y %H:%M:%S"
+  date_output_format: "%d.%m.%Y"
