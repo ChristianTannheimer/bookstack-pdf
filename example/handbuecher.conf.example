@@ -1,0 +1,8 @@
+# Buch-Slug | Nextcloud-Zielordner | Dateiname
+#
+# Slug steht in der BookStack-URL: /books/handbuch-gemeinde-koessen
+# Zielordner muss in Nextcloud bereits existieren - das Skript legt ihn nicht an.
+# Dateiname bleibt konstant, damit geteilte Links stabil bleiben.
+
+handbuch-gemeinde-koessen | Kunden/Gemeinde Koessen/Dokumentation | Handbuch Energiebuchhaltung.pdf
+handbuch-awv-koessen      | Kunden/AWV Koessen/Dokumentation      | Handbuch Energiebuchhaltung.pdf
