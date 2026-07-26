@@ -1,0 +1,18 @@
+# Echte Werte gehoeren auf den Server, nicht ins Repo.
+# Nur die *.example-Dateien werden versioniert.
+
+.env
+export.env
+handbuecher.conf
+example/config/bookstack-to-pdf/assets/
+example/db/
+example/config/www/
+example/config/log/
+example/config/nginx/
+example/config/php/
+
+# Falls du versehentlich auf dem Server ein git init machst
+db/
+config/
+*.pdf
+*.log
