@@ -25,7 +25,7 @@ on:
         default: false
 
 env:
-  IMAGE: ghcr.io/${{ github.repository_owner }}/bookstack-pdf
+  IMAGE: ghcr.io/christiantannheimer/bookstack-pdf
   BASE_IMAGE: lscr.io/linuxserver/bookstack:latest
   B2PDF_REPO: https://github.com/NETWAYS/bookstack-to-pdf
 
